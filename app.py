@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 fastf1.Cache.enable_cache('cache')
 
-st.title("F1 Telemetry Comparison App")
+st.title("F1 Telemetry App")
 
 # Caching session loading
 @st.cache_data
