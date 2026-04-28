@@ -1,12 +1,15 @@
 import streamlit as st
 import fastf1
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import numpy as np
 
 fastf1.Cache.enable_cache('/tmp')
 
-st.title("F1 Telemetry Comparison App")
+st.set_page_config(layout="wide")
 
-@st.cache_data
+st.title("F1 Telemetry Analysis")
+
+@st.cache_data(show_spinner=False)
 def load_session(year, round_number):
     session = fastf1.get_session(year, round_number, 'R')
     session.load()
@@ -18,117 +21,140 @@ def format_lap_time(lap_time):
     seconds = total_seconds % 60
     return f"{minutes}:{seconds:06.3f}"
 
-year = st.selectbox("Select Year", list(range(2018, 2025)))
+year = st.selectbox("Year", list(range(2018, 2025)))
 
 schedule = fastf1.get_event_schedule(year)
 schedule = schedule[schedule['EventFormat'] != 'testing']
 race_names = {row['RoundNumber']: row['EventName'] for _, row in schedule.iterrows()}
 
 round_number = st.selectbox(
-    "Select Race",
+    "Race",
     options=list(race_names.keys()),
-    format_func=lambda x: f"Round {x} - {race_names[x]}"
+    format_func=lambda x: f"R{x} - {race_names[x]}"
 )
 
-try:
-    with st.spinner("Loading session data..."):
-        session = load_session(year, round_number)
-except Exception:
-    st.error("Session not available.")
-    st.stop()
+mode = st.radio("Mode", ["Fastest Lap", "Multi-Lap Overlay"])
 
-drivers = session.results[['Abbreviation']]
-driver_options = drivers['Abbreviation'].tolist()
+with st.spinner("Loading session..."):
+    session = load_session(year, round_number)
+
+drivers = session.results['Abbreviation'].tolist()
 
 col1, col2 = st.columns(2)
-
 with col1:
-    driver1 = st.selectbox("Driver 1", driver_options)
-
+    driver1 = st.selectbox("Driver 1", drivers)
 with col2:
-    driver2 = st.selectbox("Driver 2", driver_options)
+    driver2 = st.selectbox("Driver 2", drivers)
 
 if driver1 == driver2:
-    st.warning("Select two different drivers.")
+    st.warning("Pick two different drivers.")
     st.stop()
 
 laps1 = session.laps.pick_driver(driver1).dropna(subset=['LapTime'])
 laps2 = session.laps.pick_driver(driver2).dropna(subset=['LapTime'])
 
+laps1 = laps1.sort_values(by='LapTime')
+laps2 = laps2.sort_values(by='LapTime')
+
+if laps1.empty or laps2.empty:
+    st.warning("No lap data available.")
+    st.stop()
+
+lap1 = laps1.iloc[0]
+lap2 = laps2.iloc[0]
+
 st.subheader("Lap Time Comparison")
 
 col1, col2 = st.columns(2)
-
 with col1:
-    st.metric(
-        label=driver1,
-        value=format_lap_time(lap1['LapTime'])
-    )
-
+    st.metric(driver1, format_lap_time(lap1['LapTime']))
 with col2:
-    st.metric(
-        label=driver2,
-        value=format_lap_time(lap2['LapTime'])
-    )
+    st.metric(driver2, format_lap_time(lap2['LapTime']))
 
 st.divider()
-
-if laps1.empty or laps2.empty:
-    st.warning("No valid laps.")
-    st.stop()
-
-lap1 = laps1.pick_fastest()
-lap2 = laps2.pick_fastest()
 
 tel1 = lap1.get_car_data().add_distance()
 tel2 = lap2.get_car_data().add_distance()
 
-fig1, ax1 = plt.subplots()
-ax1.plot(tel1['Distance'], tel1['Speed'], label=driver1)
-ax1.plot(tel2['Distance'], tel2['Speed'], label=driver2)
-ax1.set_title("Speed Comparison")
-ax1.legend()
+# INTERACTIVE SPEED GRAPH
+fig_speed = go.Figure()
+fig_speed.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Speed'], name=driver1))
+fig_speed.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Speed'], name=driver2))
+fig_speed.update_layout(title="Speed Comparison", hovermode="x unified")
 
-fig2, ax2 = plt.subplots()
-ax2.plot(tel1['Distance'], tel1['Throttle'], label=f"{driver1} Throttle")
-ax2.plot(tel1['Distance'], tel1['Brake'], label=f"{driver1} Brake")
-ax2.plot(tel2['Distance'], tel2['Throttle'], '--', label=f"{driver2} Throttle")
-ax2.plot(tel2['Distance'], tel2['Brake'], '--', label=f"{driver2} Brake")
-ax2.set_title("Throttle & Brake")
-ax2.legend()
+st.plotly_chart(fig_speed, use_container_width=True)
 
+# COLOR CODED DELTA
 delta, ref_tel, compare_tel = fastf1.utils.delta_time(lap1, lap2)
 
-fig3, ax3 = plt.subplots()
-ax3.plot(ref_tel['Distance'], delta)
-ax3.axhline(0)
-ax3.set_title("Delta Time")
+colors = np.where(delta < 0, 'green', 'red')
 
-st.subheader("Sector Comparison")
-st.write(f"{driver1} - S1: {lap1['Sector1Time'].total_seconds():.3f} | S2: {lap1['Sector2Time'].total_seconds():.3f} | S3: {lap1['Sector3Time'].total_seconds():.3f}")
-st.write(f"{driver2} - S1: {lap2['Sector1Time'].total_seconds():.3f} | S2: {lap2['Sector2Time'].total_seconds():.3f} | S3: {lap2['Sector3Time'].total_seconds():.3f}")
+fig_delta = go.Figure()
+fig_delta.add_trace(go.Scatter(
+    x=ref_tel['Distance'],
+    y=delta,
+    mode='lines',
+    line=dict(color='white'),
+    name='Delta'
+))
 
-st.subheader("Tyre Info")
-st.write(f"{driver1}: {lap1['Compound']}")
-st.write(f"{driver2}: {lap2['Compound']}")
+fig_delta.update_layout(title="Delta Time", hovermode="x unified")
+
+st.plotly_chart(fig_delta, use_container_width=True)
+
+st.write(f"Max gain: {delta.min():.3f}s")
+st.write(f"Max loss: {delta.max():.3f}s")
+
+# MULTI LAP OVERLAY
+if mode == "Multi-Lap Overlay":
+    st.subheader("Lap Overlay")
+
+    fig_overlay = go.Figure()
+
+    for i in range(min(3, len(laps1))):
+        lap = laps1.iloc[i]
+        tel = lap.get_car_data().add_distance()
+        fig_overlay.add_trace(go.Scatter(
+            x=tel['Distance'],
+            y=tel['Speed'],
+            name=f"{driver1} Lap {i+1}"
+        ))
+
+    for i in range(min(3, len(laps2))):
+        lap = laps2.iloc[i]
+        tel = lap.get_car_data().add_distance()
+        fig_overlay.add_trace(go.Scatter(
+            x=tel['Distance'],
+            y=tel['Speed'],
+            name=f"{driver2} Lap {i+1}",
+            line=dict(dash='dot')
+        ))
+
+    fig_overlay.update_layout(title="Multi-Lap Speed Overlay")
+    st.plotly_chart(fig_overlay, use_container_width=True)
+
+# TRACK MAP
+fig_map = go.Figure()
+fig_map.add_trace(go.Scatter(
+    x=tel1['X'],
+    y=tel1['Y'],
+    mode='lines',
+    name=driver1
+))
+fig_map.update_layout(title="Track Map")
+
+st.plotly_chart(fig_map, use_container_width=True)
+
+# THROTTLE / BRAKE
+fig_tb = go.Figure()
+fig_tb.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Throttle'], name=f"{driver1} Throttle"))
+fig_tb.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Brake'], name=f"{driver1} Brake"))
+fig_tb.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Throttle'], name=f"{driver2} Throttle", line=dict(dash='dot')))
+fig_tb.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Brake'], name=f"{driver2} Brake", line=dict(dash='dot')))
+
+fig_tb.update_layout(title="Throttle & Brake", hovermode="x unified")
+st.plotly_chart(fig_tb, use_container_width=True)
 
 st.subheader("Top Speed")
 st.write(f"{driver1}: {tel1['Speed'].max():.1f} km/h")
 st.write(f"{driver2}: {tel2['Speed'].max():.1f} km/h")
-
-st.subheader("Delta Stats")
-st.write(f"Max advantage: {delta.min():.3f}s")
-st.write(f"Max loss: {delta.max():.3f}s")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.pyplot(fig1)
-    st.pyplot(fig3)
-
-with col2:
-    st.pyplot(fig2)
-
-st.subheader("Lap Times")
-st.write(f"{driver1}: {format_lap_time(lap1['LapTime'])}")
-st.write(f"{driver2}: {format_lap_time(lap2['LapTime'])}")
