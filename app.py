@@ -152,11 +152,25 @@ else:
     st.warning("Track map not available for this session.")
 
 # THROTTLE / BRAKE
-fig_tb = go.Figure()
-fig_tb.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Throttle'], name=f"{driver1} Throttle"))
-fig_tb.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Brake'], name=f"{driver1} Brake"))
-fig_tb.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Throttle'], name=f"{driver2} Throttle", line=dict(dash='dot')))
-fig_tb.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Brake'], name=f"{driver2} Brake", line=dict(dash='dot')))
+fig_throttle = go.Figure()
+
+fig_throttle.add_trace(go.Scatter(
+    x=tel1['Distance'],
+    y=tel1['Throttle'],
+    name=f"{driver1}"
+))
+
+fig_throttle.add_trace(go.Scatter(
+    x=tel2['Distance'],
+    y=tel2['Throttle'],
+    name=f"{driver2}",
+    line=dict(dash='dot')
+))
+
+fig_throttle.update_layout(
+    title="Throttle",
+    hovermode="x unified"
+)
 
 fig_tb.update_layout(title="Throttle & Brake", hovermode="x unified")
 st.plotly_chart(fig_tb, use_container_width=True)
