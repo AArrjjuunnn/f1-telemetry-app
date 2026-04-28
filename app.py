@@ -172,8 +172,6 @@ fig_throttle.update_layout(
     hovermode="x unified"
 )
 
-fig_tb.update_layout(title="Throttle & Brake", hovermode="x unified")
-st.plotly_chart(fig_tb, use_container_width=True)
 
 st.subheader("Top Speed")
 st.write(f"{driver1}: {tel1['Speed'].max():.1f} km/h")
