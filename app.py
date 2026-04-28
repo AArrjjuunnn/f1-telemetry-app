@@ -12,6 +12,12 @@ def load_session(year, round_number):
     session.load()
     return session
 
+def format_lap_time(lap_time):
+    total_seconds = lap_time.total_seconds()
+    minutes = int(total_seconds // 60)
+    seconds = total_seconds % 60
+    return f"{minutes}:{seconds:06.3f}"
+
 year = st.selectbox("Select Year", list(range(2018, 2025)))
 
 schedule = fastf1.get_event_schedule(year)
@@ -42,6 +48,10 @@ with col1:
 with col2:
     driver2 = st.selectbox("Driver 2", driver_options)
 
+if driver1 == driver2:
+    st.warning("Select two different drivers.")
+    st.stop()
+
 laps1 = session.laps.pick_driver(driver1).dropna(subset=['LapTime'])
 laps2 = session.laps.pick_driver(driver2).dropna(subset=['LapTime'])
 
@@ -58,7 +68,7 @@ tel2 = lap2.get_car_data().add_distance()
 fig1, ax1 = plt.subplots()
 ax1.plot(tel1['Distance'], tel1['Speed'], label=driver1)
 ax1.plot(tel2['Distance'], tel2['Speed'], label=driver2)
-ax1.set_title("Speed")
+ax1.set_title("Speed Comparison")
 ax1.legend()
 
 fig2, ax2 = plt.subplots()
@@ -75,6 +85,22 @@ fig3, ax3 = plt.subplots()
 ax3.plot(ref_tel['Distance'], delta)
 ax3.axhline(0)
 ax3.set_title("Delta Time")
+
+st.subheader("Sector Comparison")
+st.write(f"{driver1} - S1: {lap1['Sector1Time'].total_seconds():.3f} | S2: {lap1['Sector2Time'].total_seconds():.3f} | S3: {lap1['Sector3Time'].total_seconds():.3f}")
+st.write(f"{driver2} - S1: {lap2['Sector1Time'].total_seconds():.3f} | S2: {lap2['Sector2Time'].total_seconds():.3f} | S3: {lap2['Sector3Time'].total_seconds():.3f}")
+
+st.subheader("Tyre Info")
+st.write(f"{driver1}: {lap1['Compound']}")
+st.write(f"{driver2}: {lap2['Compound']}")
+
+st.subheader("Top Speed")
+st.write(f"{driver1}: {tel1['Speed'].max():.1f} km/h")
+st.write(f"{driver2}: {tel2['Speed'].max():.1f} km/h")
+
+st.subheader("Delta Stats")
+st.write(f"Max advantage: {delta.min():.3f}s")
+st.write(f"Max loss: {delta.max():.3f}s")
 
 col1, col2 = st.columns(2)
 
