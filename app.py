@@ -134,23 +134,23 @@ if mode == "Multi-Lap Overlay":
     st.plotly_chart(fig_overlay, use_container_width=True)
 
 # TRACK MAP
-if 'X' in tel1.columns and 'Y' in tel1.columns and not tel1['X'].isna().all():
-    fig_map = go.Figure()
-    fig_map.add_trace(go.Scatter(
-        x=tel1['X'],
-        y=tel1['Y'],
-        mode='lines',
-        name=driver1
-    ))
-    fig_map.update_layout(title="Track Map")
+# TRACK MAP
+if all(col in tel1.columns for col in ['X', 'Y']) and not tel1[['X','Y']].isna().all().all():
+    try:
+        fig_map = go.Figure()
+        fig_map.add_trace(go.Scatter(
+            x=tel1['X'],
+            y=tel1['Y'],
+            mode='lines',
+            name=driver1
+        ))
+        fig_map.update_layout(title="Track Map")
 
-    st.plotly_chart(fig_map, use_container_width=True)
+        st.plotly_chart(fig_map, use_container_width=True)
+    except Exception:
+        st.warning("Track map could not be generated.")
 else:
     st.warning("Track map not available for this session.")
-))
-fig_map.update_layout(title="Track Map")
-
-st.plotly_chart(fig_map, use_container_width=True)
 
 # THROTTLE / BRAKE
 fig_tb = go.Figure()
