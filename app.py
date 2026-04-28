@@ -134,7 +134,6 @@ if mode == "Multi-Lap Overlay":
     st.plotly_chart(fig_overlay, use_container_width=True)
 
 # TRACK MAP
-# TRACK MAP
 if all(col in tel1.columns for col in ['X', 'Y']) and not tel1[['X','Y']].isna().all().all():
     try:
         fig_map = go.Figure()
