@@ -55,6 +55,24 @@ if driver1 == driver2:
 laps1 = session.laps.pick_driver(driver1).dropna(subset=['LapTime'])
 laps2 = session.laps.pick_driver(driver2).dropna(subset=['LapTime'])
 
+st.subheader("Lap Time Comparison")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.metric(
+        label=driver1,
+        value=format_lap_time(lap1['LapTime'])
+    )
+
+with col2:
+    st.metric(
+        label=driver2,
+        value=format_lap_time(lap2['LapTime'])
+    )
+
+st.divider()
+
 if laps1.empty or laps2.empty:
     st.warning("No valid laps.")
     st.stop()
@@ -110,12 +128,6 @@ with col1:
 
 with col2:
     st.pyplot(fig2)
-
-def format_lap_time(lap_time):
-    total_seconds = lap_time.total_seconds()
-    minutes = int(total_seconds // 60)
-    seconds = total_seconds % 60
-    return f"{minutes}:{seconds:06.3f}"
 
 st.subheader("Lap Times")
 st.write(f"{driver1}: {format_lap_time(lap1['LapTime'])}")
