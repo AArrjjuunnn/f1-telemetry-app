@@ -3,7 +3,7 @@ import fastf1
 import fastf1.plotting
 import matplotlib.pyplot as plt
 
-fastf1.Cache.enable_cache('cache')
+fastf1.Cache.enable_cache('/tmp')
 
 st.title("F1 Telemetry App")
 
