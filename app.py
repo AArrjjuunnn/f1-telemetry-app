@@ -85,6 +85,12 @@ with col1:
 with col2:
     st.pyplot(fig2)
 
+def format_lap_time(lap_time):
+    total_seconds = lap_time.total_seconds()
+    minutes = int(total_seconds // 60)
+    seconds = total_seconds % 60
+    return f"{minutes}:{seconds:06.3f}"
+
 st.subheader("Lap Times")
-st.write(f"{driver1}: {lap1['LapTime']}")
-st.write(f"{driver2}: {lap2['LapTime']}")
+st.write(f"{driver1}: {format_lap_time(lap1['LapTime'])}")
+st.write(f"{driver2}: {format_lap_time(lap2['LapTime'])}")
