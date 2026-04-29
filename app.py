@@ -89,10 +89,25 @@ tel2 = lap2.get_car_data().add_distance()
 
 # INTERACTIVE SPEED GRAPH
 fig_speed = go.Figure()
-fig_speed.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Speed'], name=driver1))
-fig_speed.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Speed'], name=driver2))
-fig_speed.update_layout(title="Speed Comparison", hovermode="x unified")
 
+fig_speed.add_trace(go.Scatter(
+    x=tel1['Distance'],
+    y=tel1['Speed'],
+    name=driver1_name,
+    line=dict(color='orange', width=2)
+))
+
+fig_speed.add_trace(go.Scatter(
+    x=tel2['Distance'],
+    y=tel2['Speed'],
+    name=driver2_name,
+    line=dict(color='blue', width=2)
+))
+
+fig_speed.update_layout(
+    title="Speed Comparison",
+    hovermode="x unified"
+)
 st.plotly_chart(fig_speed, use_container_width=True)
 
 # COLOR CODED DELTA
