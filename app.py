@@ -49,9 +49,13 @@ driver_options = list(driver_map.keys())
 
 col1, col2 = st.columns(2)
 with col1:
-    driver1 = st.selectbox("Driver 1", drivers)
+    driver1_name = st.selectbox("Driver 1", driver_options)
+
 with col2:
-    driver2 = st.selectbox("Driver 2", drivers)
+    driver2_name = st.selectbox("Driver 2", driver_options)
+
+driver1 = driver_map[driver1_name]
+driver2 = driver_map[driver2_name]
 
 if driver1 == driver2:
     st.warning("Pick two different drivers.")
