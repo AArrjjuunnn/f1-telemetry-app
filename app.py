@@ -21,7 +21,7 @@ def format_lap_time(lap_time):
     seconds = total_seconds % 60
     return f"{minutes}:{seconds:06.3f}"
 
-year = st.selectbox("Year", list(range(2018, 2025)))
+year = st.selectbox("Year", list(range(2018, 2026)))
 
 schedule = fastf1.get_event_schedule(year)
 schedule = schedule[schedule['EventFormat'] != 'testing']
