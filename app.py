@@ -38,7 +38,14 @@ mode = st.radio("Mode", ["Fastest Lap", "Multi-Lap Overlay"])
 with st.spinner("Loading session..."):
     session = load_session(year, round_number)
 
-drivers = session.results['Abbreviation'].tolist()
+results = session.results[['FullName', 'Abbreviation']].dropna()
+
+driver_map = {
+    f"{row['FullName']} ({row['Abbreviation']})": row['Abbreviation']
+    for _, row in results.iterrows()
+}
+
+driver_options = list(driver_map.keys())
 
 col1, col2 = st.columns(2)
 with col1:
