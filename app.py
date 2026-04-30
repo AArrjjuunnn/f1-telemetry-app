@@ -93,7 +93,7 @@ st.divider()
 tel1 = lap1.get_car_data().add_distance()
 tel2 = lap2.get_car_data().add_distance()
 
-# SPEED GRAPH (COLORED)
+# SPEED GRAPH
 fig_speed = go.Figure()
 fig_speed.add_trace(go.Scatter(
     x=tel1['Distance'], y=tel1['Speed'],
@@ -118,9 +118,26 @@ fig_delta.add_trace(go.Scatter(
 ))
 fig_delta.update_layout(title="Delta Time", hovermode="x unified")
 st.plotly_chart(fig_delta, use_container_width=True)
+with st.expander("❓ What is Delta Time?"):
+    st.markdown("""
+**Delta Time shows the time difference between two drivers over the lap.**
+
+- The line moves as the lap progresses (distance on x-axis)
+- **Below 0 → Driver 1 is faster**
+- **Above 0 → Driver 2 is faster**
+
+### How to read it:
+- If the line goes **down**, Driver 1 is gaining time
+- If the line goes **up**, Driver 2 is gaining time
+- Flat sections mean both drivers are similar
+
+### Why it matters:
+It shows *where* time is gained or lost, not just the final lap time.
+""")
 
 st.write(f"Max gain: {delta.min():.3f}s")
 st.write(f"Max loss: {delta.max():.3f}s")
+
 
 # SECTOR VISUAL
 st.subheader("Sector Comparison")
@@ -161,7 +178,7 @@ if mode == "Multi-Lap Overlay":
     fig_overlay.update_layout(title="Multi-Lap Overlay")
     st.plotly_chart(fig_overlay, use_container_width=True)
 
-# TRACK MAP (SAFE)
+# TRACK MAP
 if all(col in tel1.columns for col in ['X', 'Y']):
     fig_map = go.Figure()
     fig_map.add_trace(go.Scatter(
