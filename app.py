@@ -18,7 +18,6 @@ def load_session(year, rnd):
     return s
 
 # telemetry cache
-@st.cache_data(show_spinner=False)
 def get_tel(lap):
     return lap.get_car_data().add_distance()
 
