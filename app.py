@@ -88,6 +88,32 @@ with col1:
 with col2:
     st.metric(driver2_name, format_lap_time(lap2['LapTime']))
 
+st.subheader("Driver Overview")
+
+col1, col2 = st.columns(2)
+
+# Driver 1 info
+with col1:
+    st.markdown(f"### {driver1_name}")
+    st.write(f"**Team:** {lap1['Team']}")
+    st.write(f"**Tyre:** {lap1['Compound']}")
+
+    tel1 = lap1.get_car_data().add_distance()
+    top_speed1 = tel1['Speed'].max()
+
+    st.write(f"**Top Speed:** {top_speed1:.1f} km/h")
+
+# Driver 2 info
+with col2:
+    st.markdown(f"### {driver2_name}")
+    st.write(f"**Team:** {lap2['Team']}")
+    st.write(f"**Tyre:** {lap2['Compound']}")
+
+    tel2 = lap2.get_car_data().add_distance()
+    top_speed2 = tel2['Speed'].max()
+
+    st.write(f"**Top Speed:** {top_speed2:.1f} km/h")
+
 st.divider()
 
 tel1 = lap1.get_car_data().add_distance()
