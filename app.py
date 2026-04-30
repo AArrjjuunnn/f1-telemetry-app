@@ -24,7 +24,8 @@ def load_session(year, rnd):
     return s
 
 # telemetry cache
-def get_tel(lap):
+@st.cache_data(show_spinner=False, ttl=1800)
+def load_session(year, rnd):
     return lap.get_car_data().add_distance()
 
 # time format
