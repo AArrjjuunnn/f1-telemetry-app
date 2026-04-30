@@ -9,6 +9,12 @@ fastf1.Cache.enable_cache('/tmp')
 
 st.set_page_config(layout="wide")
 st.title("F1 Telemetry Analysis")
+st.sidebar.markdown("## ⚙️ Controls")
+
+if st.sidebar.button("🧹 Clear Cache"):
+    st.cache_data.clear()
+    st.success("Cache cleared. Reloading...")
+    st.rerun()
 
 # load session
 @st.cache_data(show_spinner=False)
