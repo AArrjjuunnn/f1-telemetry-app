@@ -264,8 +264,3 @@ st.subheader("Export Data")
 
 csv = tel1.to_csv().encode('utf-8')
 st.download_button("Download Driver 1 Telemetry", csv, "telemetry.csv", "text/csv")
-
-# TOP SPEED
-st.subheader("Top Speed")
-st.write(f"{driver1_name}: {tel1['Speed'].max():.1f} km/h")
-st.write(f"{driver2_name}: {tel2['Speed'].max():.1f} km/h")
