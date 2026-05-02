@@ -216,7 +216,7 @@ st.markdown(f"""
 """)
 
 # =========================
-# FIXED SUMMARY (WORKING)
+# FIXED SUMMARY
 # =========================
 st.subheader("Race Insight")
 
@@ -258,14 +258,51 @@ st.markdown(f"""
 st.header("Race Pace")
 
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=laps1['LapNumber'],
-                         y=laps1['LapTime'].dt.total_seconds(),
-                         name=d1n))
-fig.add_trace(go.Scatter(x=laps2['LapNumber'],
-                         y=laps2['LapTime'].dt.total_seconds(),
-                         name=d2n))
+
+t1 = laps1['LapTime'].dt.total_seconds()
+t2 = laps2['LapTime'].dt.total_seconds()
+
+fig.add_trace(go.Scatter(x=laps1['LapNumber'], y=t1, name=d1n))
+fig.add_trace(go.Scatter(x=laps2['LapNumber'], y=t2, name=d2n))
+
 fig.update_layout(height=350 if is_mobile else 500, title="Consistency")
+
 st.plotly_chart(fig, use_container_width=True)
+
+# stats
+st.subheader("Consistency Stats")
+
+std1 = t1.std()
+std2 = t2.std()
+
+avg1 = t1.mean()
+avg2 = t2.mean()
+
+st.write(f"{d1n} Avg: {avg1:.3f}s | Variance: {std1:.3f}")
+st.write(f"{d2n} Avg: {avg2:.3f}s | Variance: {std2:.3f}")
+
+if std1 < std2:
+    st.success(f"{d1n} is more consistent")
+else:
+    st.success(f"{d2n} is more consistent")
+    # mark extremes
+    gi = np.argmin(delta)
+    li = np.argmax(delta)
+
+    st.write(f"Max gain at {ref['Distance'].iloc[gi]:.0f}m")
+    st.write(f"Max loss at {ref['Distance'].iloc[li]:.0f}m")
+
+    with st.expander("❓ What is Delta Time?"):
+        st.write("""
+    Delta shows time difference along the lap.
+
+    - Below 0 → Driver 1 ahead  
+    - Above 0 → Driver 2 ahead  
+
+    Slope matters:
+    - Flat = equal pace  
+    - Steep = big gain/loss
+    """)
 
 # =========================
 # LIVE REFRESH
