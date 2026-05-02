@@ -66,6 +66,14 @@ with st.spinner("Loading..."):
 # DRIVER SELECT (FORM)
 # =========================
 with st.form("driver_form"):
+    res = session.results[['FullName', 'Abbreviation']].dropna()
+
+    dmap = {
+        f"{r['FullName']} ({r['Abbreviation']})": r['Abbreviation']
+        for _, r in res.iterrows()
+    }
+
+    opts = list(dmap.keys())
 
     c1, c2 = st.columns(2)
 
