@@ -11,10 +11,11 @@ fastf1.Cache.enable_cache('/tmp')
 st.set_page_config(layout="wide")
 st.title("F1 Telemetry Analysis")
 
-# sidebar controls
+# sidebar
 st.sidebar.markdown("## ⚙️ Controls")
 
 live_mode = st.sidebar.toggle("Live Mode")
+is_mobile = st.sidebar.toggle("📱 Mobile View", value=False)
 
 if st.sidebar.button("🧹 Clear Cache"):
     st.cache_data.clear()
@@ -37,14 +38,12 @@ def fmt(t):
     s = t.total_seconds()
     return f"{int(s//60)}:{s%60:06.3f}"
 
-# year select
+# inputs
 year = st.selectbox("Year", list(range(2018, 2027)))
 
-# schedule
 schedule = fastf1.get_event_schedule(year)
 schedule = schedule[schedule['EventFormat'] != 'testing']
 
-# filter future
 if year == 2026:
     now = datetime.datetime.now()
     schedule['EventDate'] = schedule['EventDate'].dt.tz_localize(None)
@@ -52,17 +51,14 @@ if year == 2026:
 
 schedule = schedule.sort_values(by='RoundNumber')
 
-# race select
 race_map = {r['RoundNumber']: r['EventName'] for _, r in schedule.iterrows()}
 rnd = st.selectbox("Race", race_map.keys(),
                    format_func=lambda x: f"R{x} - {race_map[x]}")
 
-# session type
 sess_type = 'R'
 if live_mode:
     sess_type = st.selectbox("Session", ['FP1','FP2','FP3','Q','R'])
 
-# load session
 with st.spinner("Loading..."):
     session = load_session(year, rnd, sess_type)
 
@@ -116,28 +112,36 @@ if tel1.empty or tel2.empty:
     st.error("No telemetry")
     st.stop()
 
-# overview
+# =========================
+# OVERVIEW
+# =========================
 st.header("Overview")
 
-c1, c2 = st.columns(2)
+if is_mobile:
+    for name, lap, tel in [(d1n, lap1, tel1), (d2n, lap2, tel2)]:
+        st.markdown(f"### {name}")
+        st.write("Team:", lap['Team'])
+        st.write("Tyre:", lap['Compound'])
+        st.write("Lap:", lap['LapNumber'])
+        st.write("Tyre life:", lap['TyreLife'])
+        st.write("Top speed:", f"{tel['Speed'].max():.1f} km/h")
+        st.divider()
+else:
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"### {d1n}")
+        st.write("Team:", lap1['Team'])
+        st.write("Tyre:", lap1['Compound'])
+        st.write("Top speed:", f"{tel1['Speed'].max():.1f} km/h")
+    with c2:
+        st.markdown(f"### {d2n}")
+        st.write("Team:", lap2['Team'])
+        st.write("Tyre:", lap2['Compound'])
+        st.write("Top speed:", f"{tel2['Speed'].max():.1f} km/h")
 
-with c1:
-    st.markdown(f"### {d1n}")
-    st.write("Team:", lap1['Team'])
-    st.write("Tyre:", lap1['Compound'])
-    st.write("Lap:", lap1['LapNumber'])
-    st.write("Tyre life:", lap1['TyreLife'])
-    st.write("Top speed:", f"{tel1['Speed'].max():.1f} km/h")
-
-with c2:
-    st.markdown(f"### {d2n}")
-    st.write("Team:", lap2['Team'])
-    st.write("Tyre:", lap2['Compound'])
-    st.write("Lap:", lap2['LapNumber'])
-    st.write("Tyre life:", lap2['TyreLife'])
-    st.write("Top speed:", f"{tel2['Speed'].max():.1f} km/h")
-
-# lap time
+# =========================
+# LAP TIME
+# =========================
 st.subheader("Lap Time")
 
 c1, c2 = st.columns(2)
@@ -146,64 +150,67 @@ with c1:
 with c2:
     st.metric(d2n, fmt(lap2['LapTime']))
 
-# analysis
+# =========================
+# ANALYSIS
+# =========================
 st.header("Lap Analysis")
-
-st.caption("Compare speed, delta, and inputs")
 
 # speed
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Speed'],
-                         name=d1n, line=dict(color='orange')))
-fig.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Speed'],
-                         name=d2n, line=dict(color='blue')))
-fig.update_layout(title="Speed", hovermode="x unified")
+fig.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Speed'], name=d1n))
+fig.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Speed'], name=d2n))
+fig.update_layout(height=350 if is_mobile else 500, title="Speed")
 st.plotly_chart(fig, use_container_width=True)
 
 # delta
 delta, ref, _ = fastf1.utils.delta_time(lap1, lap2)
 delta = np.array(delta)
 
-st.markdown("### 🔥 Time Difference")
-
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=ref['Distance'], y=delta, name="Delta"))
-fig.update_layout(title="Delta", hovermode="x unified")
+fig.add_trace(go.Scatter(x=ref['Distance'], y=delta))
+fig.update_layout(height=350 if is_mobile else 500, title="Delta")
 st.plotly_chart(fig, use_container_width=True)
 
-with st.expander("Delta help"):
-    st.write("Below 0 = Driver1 faster, Above 0 = Driver2 faster")
-
-# summary
+# =========================
+# FIXED SUMMARY (WORKING)
+# =========================
 st.subheader("Race Insight")
 
-total = delta[-1]
+final_gap = delta[-1]
 
-if total < 0:
+# sector safe check
+def safe_sector(lap, key):
+    try:
+        return lap[key].total_seconds()
+    except:
+        return 0
+
+s1 = safe_sector(lap1, 'Sector1Time') - safe_sector(lap2, 'Sector1Time')
+s2 = safe_sector(lap1, 'Sector2Time') - safe_sector(lap2, 'Sector2Time')
+s3 = safe_sector(lap1, 'Sector3Time') - safe_sector(lap2, 'Sector3Time')
+
+sectors = {"Sector 1": s1, "Sector 2": s2, "Sector 3": s3}
+best_sector = min(sectors, key=sectors.get)
+
+top1 = tel1['Speed'].max()
+top2 = tel2['Speed'].max()
+
+if final_gap < 0:
     faster = d1n
+    reason = "straight-line speed" if top1 > top2 else "cornering"
 else:
     faster = d2n
+    reason = "straight-line speed" if top2 > top1 else "cornering"
 
-st.write(f"{faster} was faster overall by {abs(total):.3f}s")
+st.markdown(f"""
+**{faster} was faster overall by {abs(final_gap):.3f}s**
 
-# throttle/brake
-st.markdown("#### Inputs")
+- Strongest sector: **{best_sector}**
+- Likely advantage: **{reason}**
+""")
 
-if 'Throttle' in tel1.columns:
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Throttle'], name=d1n))
-    fig.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Throttle'], name=d2n))
-    fig.update_layout(title="Throttle")
-    st.plotly_chart(fig, use_container_width=True)
-
-if 'Brake' in tel1.columns:
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Brake'], name=d1n))
-    fig.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Brake'], name=d2n))
-    fig.update_layout(title="Brake")
-    st.plotly_chart(fig, use_container_width=True)
-
-# consistency
+# =========================
+# CONSISTENCY
 st.header("Race Pace")
 
 fig = go.Figure()
@@ -213,14 +220,13 @@ fig.add_trace(go.Scatter(x=laps1['LapNumber'],
 fig.add_trace(go.Scatter(x=laps2['LapNumber'],
                          y=laps2['LapTime'].dt.total_seconds(),
                          name=d2n))
-fig.update_layout(title="Consistency")
+fig.update_layout(height=350 if is_mobile else 500, title="Consistency")
 st.plotly_chart(fig, use_container_width=True)
 
-with st.expander("Consistency help"):
-    st.write("Flat = consistent, spikes = errors")
-
-# live refresh
+# =========================
+# LIVE REFRESH
+# =========================
 if live_mode:
-    st.caption("Live mode active (refreshing)")
+    st.caption("Live mode active")
     time.sleep(30)
     st.rerun()
