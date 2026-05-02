@@ -209,10 +209,10 @@ else:
 
 st.markdown(f"""
 **Biggest Gain:**  
-{gain_driver} gained **{gain:.3f}s** in segment {best_idx+1}
+{gain_driver} gained **{gain:.3f}s** in corner {best_idx+1}
 
 **Biggest Loss:**  
-{loss_driver} lost **{loss:.3f}s** in segment {worst_idx+1}
+{loss_driver} lost **{loss:.3f}s** in corner {worst_idx+1}
 """)
 
 # =========================
