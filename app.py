@@ -170,6 +170,19 @@ fig = go.Figure()
 fig.add_trace(go.Scatter(x=ref['Distance'], y=delta))
 fig.update_layout(height=350 if is_mobile else 500, title="Delta")
 st.plotly_chart(fig, use_container_width=True)
+
+with st.expander("❓ What is Delta Time?"):
+    st.write("""
+   Delta shows time difference along the lap.
+
+   - Below 0 → Driver 1 ahead  
+   - Above 0 → Driver 2 ahead  
+
+   Slope matters:
+   - Flat = equal pace  
+   - Steep = big gain/loss
+   """)
+
 # ===== CORNER ANALYSIS =====
 st.subheader("🔥 Corner Analysis")
 
@@ -292,17 +305,6 @@ else:
     st.write(f"Max gain at {ref['Distance'].iloc[gi]:.0f}m")
     st.write(f"Max loss at {ref['Distance'].iloc[li]:.0f}m")
 
-    with st.expander("❓ What is Delta Time?"):
-        st.write("""
-    Delta shows time difference along the lap.
-
-    - Below 0 → Driver 1 ahead  
-    - Above 0 → Driver 2 ahead  
-
-    Slope matters:
-    - Flat = equal pace  
-    - Steep = big gain/loss
-    """)
 
 # =========================
 # LIVE REFRESH
