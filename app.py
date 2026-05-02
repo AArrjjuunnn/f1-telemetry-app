@@ -62,12 +62,9 @@ if live_mode:
 with st.spinner("Loading..."):
     session = load_session(year, rnd, sess_type)
 
-# drivers
-res = session.results[['FullName','Abbreviation']].dropna()
-dmap = {f"{r['FullName']} ({r['Abbreviation']})": r['Abbreviation']
-        for _, r in res.iterrows()}
-opts = list(dmap.keys())
-
+# =========================
+# DRIVER SELECT (FORM)
+# =========================
 with st.form("driver_form"):
 
     c1, c2 = st.columns(2)
@@ -78,20 +75,38 @@ with st.form("driver_form"):
         d2n = st.selectbox("Driver 2", opts)
 
     submitted = st.form_submit_button("Compare Drivers")
-    if not submitted:
-        st.info("Select drivers and click 'Compare Drivers'")
-        st.stop()
 
+# block until submit
+if not submitted and "drivers_locked" not in st.session_state:
+    st.info("Select drivers and click Compare")
+    st.stop()
+
+# store drivers
+if submitted:
+    st.session_state.drivers_locked = True
+    st.session_state.d1n = d1n
+    st.session_state.d2n = d2n
+
+# use stored drivers
+d1n = st.session_state.d1n
+d2n = st.session_state.d2n
+
+# short names
+short1 = d1n.split("(")[-1].replace(")", "")
+short2 = d2n.split("(")[-1].replace(")", "")
+
+# map to codes
 d1 = dmap[d1n]
 d2 = dmap[d2n]
 
-short1 = d1n.split("(")[-1].replace(")", "")
-short2 = d2n.split("(")[-1].replace(")", "")
+# prevent same
 if d1 == d2:
-    st.warning("Pick two drivers")
+    st.warning("Pick two different drivers")
     st.stop()
 
-# laps
+# =========================
+# LAPS
+# =========================
 laps1 = session.laps.pick_driver(d1).dropna(subset=['LapTime']).head(15)
 laps2 = session.laps.pick_driver(d2).dropna(subset=['LapTime']).head(15)
 
@@ -102,17 +117,41 @@ if laps1.empty or laps2.empty:
 laps1 = laps1.sort_values(by='LapTime')
 laps2 = laps2.sort_values(by='LapTime')
 
-# lap select
-mode = st.radio("Lap Mode", ["Fastest", "Select"])
+# =========================
+# MODE (PERSISTENT)
+# =========================
+if "mode" not in st.session_state:
+    st.session_state.mode = "Fastest"
 
+mode = st.radio(
+    "Lap Mode",
+    ["Fastest", "Select"],
+    index=0 if st.session_state.mode == "Fastest" else 1
+)
+
+st.session_state.mode = mode
+
+# =========================
+# LAP SELECTION
+# =========================
 if mode == "Fastest":
     lap1 = laps1.iloc[0]
     lap2 = laps2.iloc[0]
+
 else:
-    l1 = st.selectbox("Lap D1", laps1['LapNumber'])
-    l2 = st.selectbox("Lap D2", laps2['LapNumber'])
-    lap1 = laps1[laps1['LapNumber']==l1].iloc[0]
-    lap2 = laps2[laps2['LapNumber']==l2].iloc[0]
+    if "lap1_sel" not in st.session_state:
+        st.session_state.lap1_sel = laps1.iloc[0]['LapNumber']
+    if "lap2_sel" not in st.session_state:
+        st.session_state.lap2_sel = laps2.iloc[0]['LapNumber']
+
+    l1 = st.selectbox("Lap D1", laps1['LapNumber'], key="lap1_box")
+    l2 = st.selectbox("Lap D2", laps2['LapNumber'], key="lap2_box")
+
+    st.session_state.lap1_sel = l1
+    st.session_state.lap2_sel = l2
+
+    lap1 = laps1[laps1['LapNumber'] == l1].iloc[0]
+    lap2 = laps2[laps2['LapNumber'] == l2].iloc[0]
 
 # telemetry
 tel1 = get_tel(lap1)
