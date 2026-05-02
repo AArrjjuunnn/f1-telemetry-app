@@ -68,15 +68,25 @@ dmap = {f"{r['FullName']} ({r['Abbreviation']})": r['Abbreviation']
         for _, r in res.iterrows()}
 opts = list(dmap.keys())
 
-c1, c2 = st.columns(2)
-with c1:
-    d1n = st.selectbox("Driver 1", opts)
-with c2:
-    d2n = st.selectbox("Driver 2", opts)
+with st.form("driver_form"):
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        d1n = st.selectbox("Driver 1", opts)
+    with c2:
+        d2n = st.selectbox("Driver 2", opts)
+
+    submitted = st.form_submit_button("Compare Drivers")
+    if not submitted:
+        st.info("Select drivers and click 'Compare Drivers'")
+        st.stop()
 
 d1 = dmap[d1n]
 d2 = dmap[d2n]
 
+short1 = d1n.split("(")[-1].replace(")", "")
+short2 = d2n.split("(")[-1].replace(")", "")
 if d1 == d2:
     st.warning("Pick two drivers")
     st.stop()
@@ -118,7 +128,7 @@ if tel1.empty or tel2.empty:
 st.header("Overview")
 
 if is_mobile:
-    for name, lap, tel in [(d1n, lap1, tel1), (d2n, lap2, tel2)]:
+    for name, lap, tel in [(short1, lap1, tel1), (short2, lap2, tel2)]:
         st.markdown(f"### {name}")
         st.write("Team:", lap['Team'])
         st.write("Tyre:", lap['Compound'])
@@ -156,21 +166,39 @@ with c2:
 st.header("Lap Analysis")
 
 # speed
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Speed'], name=d1n))
-fig.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Speed'], name=d2n))
-fig.update_layout(height=350 if is_mobile else 500, title="Speed")
-st.plotly_chart(fig, use_container_width=True)
+fig.update_layout(
+    height=350 if is_mobile else 500,
+    title="Speed",
+    hovermode="x unified",
+    legend=dict(
+        orientation="h" if is_mobile else "v",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1,
+        font=dict(size=10 if is_mobile else 12)
+    ),
+    margin=dict(l=10, r=10, t=40, b=10)
+)
 
 # delta
 delta, ref, _ = fastf1.utils.delta_time(lap1, lap2)
 delta = np.array(delta)
 
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=ref['Distance'], y=delta))
-fig.update_layout(height=350 if is_mobile else 500, title="Delta")
-st.plotly_chart(fig, use_container_width=True)
-
+fig.update_layout(
+    height=350 if is_mobile else 500,
+    title="Speed",
+    hovermode="x unified",
+    legend=dict(
+        orientation="h" if is_mobile else "v",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1,
+        font=dict(size=10 if is_mobile else 12)
+    ),
+    margin=dict(l=10, r=10, t=40, b=10)
+)
 with st.expander("❓ What is Delta Time?"):
     st.write("""
    Delta shows time difference along the lap.
@@ -278,9 +306,20 @@ t2 = laps2['LapTime'].dt.total_seconds()
 fig.add_trace(go.Scatter(x=laps1['LapNumber'], y=t1, name=d1n))
 fig.add_trace(go.Scatter(x=laps2['LapNumber'], y=t2, name=d2n))
 
-fig.update_layout(height=350 if is_mobile else 500, title="Consistency")
-
-st.plotly_chart(fig, use_container_width=True)
+fig.update_layout(
+    height=350 if is_mobile else 500,
+    title="Speed",
+    hovermode="x unified",
+    legend=dict(
+        orientation="h" if is_mobile else "v",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1,
+        font=dict(size=10 if is_mobile else 12)
+    ),
+    margin=dict(l=10, r=10, t=40, b=10)
+)
 
 # stats
 st.subheader("Consistency Stats")
