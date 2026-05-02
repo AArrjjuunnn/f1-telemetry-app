@@ -170,6 +170,50 @@ fig = go.Figure()
 fig.add_trace(go.Scatter(x=ref['Distance'], y=delta))
 fig.update_layout(height=350 if is_mobile else 500, title="Delta")
 st.plotly_chart(fig, use_container_width=True)
+# ===== CORNER ANALYSIS =====
+st.subheader("🔥 Corner Analysis")
+
+# split track into segments
+num_segments = 20
+dist = ref['Distance']
+segment_edges = np.linspace(dist.min(), dist.max(), num_segments + 1)
+
+segment_deltas = []
+
+for i in range(num_segments):
+    mask = (dist >= segment_edges[i]) & (dist < segment_edges[i+1])
+    if np.any(mask):
+        seg_delta = delta[mask].mean()
+        segment_deltas.append(seg_delta)
+    else:
+        segment_deltas.append(0)
+
+segment_deltas = np.array(segment_deltas)
+
+# best/worst segments
+best_idx = np.argmin(segment_deltas)
+worst_idx = np.argmax(segment_deltas)
+
+gain = abs(segment_deltas[best_idx])
+loss = abs(segment_deltas[worst_idx])
+
+if segment_deltas[best_idx] < 0:
+    gain_driver = d1n
+else:
+    gain_driver = d2n
+
+if segment_deltas[worst_idx] > 0:
+    loss_driver = d1n
+else:
+    loss_driver = d2n
+
+st.markdown(f"""
+**Biggest Gain:**  
+{gain_driver} gained **{gain:.3f}s** in segment {best_idx+1}
+
+**Biggest Loss:**  
+{loss_driver} lost **{loss:.3f}s** in segment {worst_idx+1}
+""")
 
 # =========================
 # FIXED SUMMARY (WORKING)
