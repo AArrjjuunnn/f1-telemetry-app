@@ -54,10 +54,16 @@ schedule = schedule.sort_values(by='RoundNumber')
 race_map = {r['RoundNumber']: r['EventName'] for _, r in schedule.iterrows()}
 rnd = st.selectbox("Race", race_map.keys(),
                    format_func=lambda x: f"R{x} - {race_map[x]}")
+sessions = ['FP1','FP2','FP3','Q','R']
 
-sess_type = 'R'
-if live_mode:
-    sess_type = st.selectbox("Session", ['FP1','FP2','FP3','Q','R'])
+# choose default based on mode
+default_index = 4 if live_mode else 3  # Race if live, Quali otherwise
+
+sess_type = st.selectbox(
+    "Session",
+    sessions,
+    index=default_index
+)
 
 with st.spinner("Loading..."):
     session = load_session(year, rnd, sess_type)
