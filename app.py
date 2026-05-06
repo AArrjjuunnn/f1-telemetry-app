@@ -5,7 +5,9 @@ import numpy as np
 import datetime
 import time
 
-fastf1.Cache.enable_cache('/tmp')
+@st.cache_data(ttl=600)
+def load_schedule(year):
+    schedule = fastf1.get_event_schedule(year)
 
 st.set_page_config(layout="wide")
 st.title("F1 Telemetry Analysis")
@@ -14,12 +16,7 @@ st.title("F1 Telemetry Analysis")
 live_mode = st.sidebar.toggle("Live Mode")
 is_mobile = st.sidebar.toggle("Mobile View", value=False)
 
-if st.sidebar.button("Clear Cache"):
-    st.cache_data.clear()
-    st.rerun()
-
 # load session (OPTIMIZED)
-@st.cache_data(ttl=900)
 def load_session(year, rnd, sess):
     s = fastf1.get_session(year, rnd, sess)
     s.load(laps=True, telemetry=False, weather=False)
@@ -72,18 +69,6 @@ session_label = st.selectbox(
 )
 
 sess_type = session_map[session_label]
-
-
-if not valid_sessions:
-    valid_sessions = ['R']
-
-default_index = 0
-if 'Q' in valid_sessions:
-    default_index = valid_sessions.index('Q')
-if live_mode and 'R' in valid_sessions:
-    default_index = valid_sessions.index('R')
-
-sess_type = st.selectbox("Session", valid_sessions, index=default_index)
 
 # load
 with st.spinner("Loading..."):
