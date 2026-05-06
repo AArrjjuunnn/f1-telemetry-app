@@ -5,35 +5,30 @@ import numpy as np
 import datetime
 import time
 
-# cache setup
 fastf1.Cache.enable_cache('/tmp')
 
 st.set_page_config(layout="wide")
 st.title("F1 Telemetry Analysis")
 
 # sidebar
-st.sidebar.markdown("## ⚙️ Controls")
-
+st.sidebar.markdown("## Controls")
 live_mode = st.sidebar.toggle("Live Mode")
-is_mobile = st.sidebar.toggle("📱 Mobile View", value=False)
+is_mobile = st.sidebar.toggle("Mobile View", value=False)
 
-if st.sidebar.button("🧹 Clear Cache"):
+if st.sidebar.button("Clear Cache"):
     st.cache_data.clear()
-    st.success("Cache cleared")
     st.rerun()
 
-# load session
-@st.cache_data(show_spinner=False, ttl=900)
+# load
+@st.cache_data(ttl=900)
 def load_session(year, rnd, sess):
     s = fastf1.get_session(year, rnd, sess)
     s.load()
     return s
 
-# telemetry
 def get_tel(lap):
     return lap.get_car_data().add_distance()
 
-# format time
 def fmt(t):
     s = t.total_seconds()
     return f"{int(s//60)}:{s%60:06.3f}"
@@ -47,158 +42,111 @@ schedule = schedule[schedule['EventFormat'] != 'testing']
 if year == 2026:
     now = datetime.datetime.now()
     schedule['EventDate'] = schedule['EventDate'].dt.tz_localize(None)
-    schedule = schedule[schedule['EventDate'] <= now]
+    schedule = schedule[
+        (schedule['EventDate'] <= now) |
+        (schedule['EventDate'] <= now + datetime.timedelta(days=3))
+    ]
 
 schedule = schedule.sort_values(by='RoundNumber')
 
 race_map = {r['RoundNumber']: r['EventName'] for _, r in schedule.iterrows()}
 rnd = st.selectbox("Race", race_map.keys(),
                    format_func=lambda x: f"R{x} - {race_map[x]}")
-event = fastf1.get_event(year, rnd)
 
-available_sessions = event.sessions
+# session selector (safe)
+sessions = ['FP1','FP2','FP3','Q','R','S','SQ']
+valid_sessions = []
 
-# make readable list
-session_names = [s[0] for s in available_sessions]
+for s in sessions:
+    try:
+        fastf1.get_session(year, rnd, s)
+        valid_sessions.append(s)
+    except:
+        pass
 
-# default logic
+if not valid_sessions:
+    valid_sessions = ['R']
+
 default_index = 0
-for i, s in enumerate(session_names):
-    if s == 'Q':
-        default_index = i
+if 'Q' in valid_sessions:
+    default_index = valid_sessions.index('Q')
+if live_mode and 'R' in valid_sessions:
+    default_index = valid_sessions.index('R')
 
-if live_mode:
-    for i, s in enumerate(session_names):
-        if s == 'R':
-            default_index = i
-
-sess_type = st.selectbox(
-    "Session",
-    session_names,
-    index=default_index
-)
-
-with st.spinner("Loading..."):
-    session = load_session(year, rnd, sess_type)
-sess_type = st.selectbox(
-    "Session",
-    sessions,
-    index=default_index
-)
+sess_type = st.selectbox("Session", valid_sessions, index=default_index)
 
 with st.spinner("Loading..."):
     session = load_session(year, rnd, sess_type)
 
-# =========================
-# DRIVER SELECT (FORM)
-# =========================
+if session.laps.empty:
+    st.warning("No data yet")
+    st.stop()
+
+# drivers
+res = session.results[['FullName','Abbreviation']].dropna()
+dmap = {f"{r['FullName']} ({r['Abbreviation']})": r['Abbreviation']
+        for _, r in res.iterrows()}
+opts = list(dmap.keys())
+
+# driver form
 with st.form("driver_form"):
-    res = session.results[['FullName', 'Abbreviation']].dropna()
-
-    dmap = {
-        f"{r['FullName']} ({r['Abbreviation']})": r['Abbreviation']
-        for _, r in res.iterrows()
-    }
-
-    opts = list(dmap.keys())
-
     c1, c2 = st.columns(2)
-
     with c1:
         d1n = st.selectbox("Driver 1", opts)
     with c2:
         d2n = st.selectbox("Driver 2", opts)
+    submitted = st.form_submit_button("Compare")
 
-    submitted = st.form_submit_button("Compare Drivers")
-
-# block until submit
 if not submitted and "drivers_locked" not in st.session_state:
-    st.info("Select drivers and click Compare")
     st.stop()
 
-# store drivers
 if submitted:
     st.session_state.drivers_locked = True
     st.session_state.d1n = d1n
     st.session_state.d2n = d2n
 
-# use stored drivers
 d1n = st.session_state.d1n
 d2n = st.session_state.d2n
 
-# short names
 short1 = d1n.split("(")[-1].replace(")", "")
 short2 = d2n.split("(")[-1].replace(")", "")
 
-# map to codes
 d1 = dmap[d1n]
 d2 = dmap[d2n]
 
-# prevent same
 if d1 == d2:
-    st.warning("Pick two different drivers")
+    st.warning("Pick different drivers")
     st.stop()
 
-# =========================
-# LAPS
-# =========================
+# laps
 laps1 = session.laps.pick_driver(d1).dropna(subset=['LapTime']).head(15)
 laps2 = session.laps.pick_driver(d2).dropna(subset=['LapTime']).head(15)
-
-if laps1.empty or laps2.empty:
-    st.warning("Waiting for data...")
-    st.stop()
 
 laps1 = laps1.sort_values(by='LapTime')
 laps2 = laps2.sort_values(by='LapTime')
 
-# =========================
-# MODE (PERSISTENT)
-# =========================
+# mode
 if "mode" not in st.session_state:
     st.session_state.mode = "Fastest"
 
-mode = st.radio(
-    "Lap Mode",
-    ["Fastest", "Select"],
-    index=0 if st.session_state.mode == "Fastest" else 1
-)
-
+mode = st.radio("Lap Mode", ["Fastest", "Select"],
+                index=0 if st.session_state.mode == "Fastest" else 1)
 st.session_state.mode = mode
 
-# =========================
-# LAP SELECTION
-# =========================
+# lap pick
 if mode == "Fastest":
     lap1 = laps1.iloc[0]
     lap2 = laps2.iloc[0]
-
 else:
-    if "lap1_sel" not in st.session_state:
-        st.session_state.lap1_sel = laps1.iloc[0]['LapNumber']
-    if "lap2_sel" not in st.session_state:
-        st.session_state.lap2_sel = laps2.iloc[0]['LapNumber']
+    l1 = st.selectbox("Lap D1", laps1['LapNumber'])
+    l2 = st.selectbox("Lap D2", laps2['LapNumber'])
+    lap1 = laps1[laps1['LapNumber']==l1].iloc[0]
+    lap2 = laps2[laps2['LapNumber']==l2].iloc[0]
 
-    l1 = st.selectbox("Lap D1", laps1['LapNumber'], key="lap1_box")
-    l2 = st.selectbox("Lap D2", laps2['LapNumber'], key="lap2_box")
-
-    st.session_state.lap1_sel = l1
-    st.session_state.lap2_sel = l2
-
-    lap1 = laps1[laps1['LapNumber'] == l1].iloc[0]
-    lap2 = laps2[laps2['LapNumber'] == l2].iloc[0]
-
-# telemetry
 tel1 = get_tel(lap1)
 tel2 = get_tel(lap2)
 
-if tel1.empty or tel2.empty:
-    st.error("No telemetry")
-    st.stop()
-
-# =========================
-# OVERVIEW
-# =========================
+# overview
 st.header("Overview")
 
 if is_mobile:
@@ -206,223 +154,92 @@ if is_mobile:
         st.markdown(f"### {name}")
         st.write("Team:", lap['Team'])
         st.write("Tyre:", lap['Compound'])
-        st.write("Lap:", lap['LapNumber'])
-        st.write("Tyre life:", lap['TyreLife'])
-        st.write("Top speed:", f"{tel['Speed'].max():.1f} km/h")
-        st.divider()
+        st.write("Top speed:", f"{tel['Speed'].max():.1f}")
 else:
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(f"### {d1n}")
+        st.markdown(short1)
         st.write("Team:", lap1['Team'])
-        st.write("Tyre:", lap1['Compound'])
-        st.write("Top speed:", f"{tel1['Speed'].max():.1f} km/h")
     with c2:
-        st.markdown(f"### {d2n}")
+        st.markdown(short2)
         st.write("Team:", lap2['Team'])
-        st.write("Tyre:", lap2['Compound'])
-        st.write("Top speed:", f"{tel2['Speed'].max():.1f} km/h")
 
-# =========================
-# LAP TIME
-# =========================
+# lap time
 st.subheader("Lap Time")
-
 c1, c2 = st.columns(2)
 with c1:
-    st.metric(d1n, fmt(lap1['LapTime']))
+    st.metric(short1, fmt(lap1['LapTime']))
 with c2:
-    st.metric(d2n, fmt(lap2['LapTime']))
-
-# =========================
-# ANALYSIS
-# =========================
-st.header("Lap Analysis")
+    st.metric(short2, fmt(lap2['LapTime']))
 
 # speed
-fig.update_layout(
-    height=350 if is_mobile else 500,
-    title="Speed",
-    hovermode="x unified",
-    legend=dict(
-        orientation="h" if is_mobile else "v",
-        yanchor="bottom",
-        y=1.02,
-        xanchor="right",
-        x=1,
-        font=dict(size=10 if is_mobile else 12)
-    ),
-    margin=dict(l=10, r=10, t=40, b=10)
-)
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Speed'], name=short1))
+fig.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Speed'], name=short2))
+fig.update_layout(height=350 if is_mobile else 500,
+                  title=f"Speed ({short1} vs {short2})",
+                  showlegend=not is_mobile)
+st.plotly_chart(fig, use_container_width=True)
 
 # delta
 delta, ref, _ = fastf1.utils.delta_time(lap1, lap2)
 delta = np.array(delta)
 
-fig.update_layout(
-    height=350 if is_mobile else 500,
-    title="Speed",
-    hovermode="x unified",
-    legend=dict(
-        orientation="h" if is_mobile else "v",
-        yanchor="bottom",
-        y=1.02,
-        xanchor="right",
-        x=1,
-        font=dict(size=10 if is_mobile else 12)
-    ),
-    margin=dict(l=10, r=10, t=40, b=10)
-)
-with st.expander("❓ What is Delta Time?"):
-    st.write("""
-   Delta shows time difference along the lap.
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=ref['Distance'], y=delta))
+fig.update_layout(height=350 if is_mobile else 500, title="Delta")
+st.plotly_chart(fig, use_container_width=True)
 
-   - Below 0 → Driver 1 ahead  
-   - Above 0 → Driver 2 ahead  
+with st.expander("Delta help"):
+    st.write("Below 0 = Driver1 faster, Above 0 = Driver2 faster")
 
-   Slope matters:
-   - Flat = equal pace  
-   - Steep = big gain/loss
-   """)
-
-# ===== CORNER ANALYSIS =====
-st.subheader("🔥 Corner Analysis")
-
-# split track into segments
-num_segments = 20
-dist = ref['Distance']
-segment_edges = np.linspace(dist.min(), dist.max(), num_segments + 1)
-
-segment_deltas = []
-
-for i in range(num_segments):
-    mask = (dist >= segment_edges[i]) & (dist < segment_edges[i+1])
-    if np.any(mask):
-        seg_delta = delta[mask].mean()
-        segment_deltas.append(seg_delta)
-    else:
-        segment_deltas.append(0)
-
-segment_deltas = np.array(segment_deltas)
-
-# best/worst segments
-best_idx = np.argmin(segment_deltas)
-worst_idx = np.argmax(segment_deltas)
-
-gain = abs(segment_deltas[best_idx])
-loss = abs(segment_deltas[worst_idx])
-
-if segment_deltas[best_idx] < 0:
-    gain_driver = d1n
-else:
-    gain_driver = d2n
-
-if segment_deltas[worst_idx] > 0:
-    loss_driver = d1n
-else:
-    loss_driver = d2n
-
-st.markdown(f"""
-**Biggest Gain:**  
-{gain_driver} gained **{gain:.3f}s** in corner {best_idx+1}
-
-**Biggest Loss:**  
-{loss_driver} lost **{loss:.3f}s** in corner {worst_idx+1}
-""")
-
-# =========================
-# FIXED SUMMARY
-# =========================
-st.subheader("Race Insight")
+# summary
+st.subheader("Summary")
 
 final_gap = delta[-1]
-
-# sector safe check
-def safe_sector(lap, key):
-    try:
-        return lap[key].total_seconds()
-    except:
-        return 0
-
-s1 = safe_sector(lap1, 'Sector1Time') - safe_sector(lap2, 'Sector1Time')
-s2 = safe_sector(lap1, 'Sector2Time') - safe_sector(lap2, 'Sector2Time')
-s3 = safe_sector(lap1, 'Sector3Time') - safe_sector(lap2, 'Sector3Time')
-
-sectors = {"Sector 1": s1, "Sector 2": s2, "Sector 3": s3}
-best_sector = min(sectors, key=sectors.get)
-
 top1 = tel1['Speed'].max()
 top2 = tel2['Speed'].max()
 
 if final_gap < 0:
-    faster = d1n
+    faster = short1
     reason = "straight-line speed" if top1 > top2 else "cornering"
 else:
-    faster = d2n
+    faster = short2
     reason = "straight-line speed" if top2 > top1 else "cornering"
 
-st.markdown(f"""
-**{faster} was faster overall by {abs(final_gap):.3f}s**
+st.write(f"{faster} faster by {abs(final_gap):.3f}s via {reason}")
 
-- Strongest sector: **{best_sector}**
-- Likely advantage: **{reason}**
-""")
+# corner analysis
+st.subheader("Corner Insight")
 
-# =========================
-# CONSISTENCY
-st.header("Race Pace")
+dist = ref['Distance']
+segments = np.linspace(dist.min(), dist.max(), 20)
+
+seg_delta = []
+for i in range(19):
+    mask = (dist >= segments[i]) & (dist < segments[i+1])
+    seg_delta.append(delta[mask].mean() if np.any(mask) else 0)
+
+best = np.argmin(seg_delta)
+st.write(f"Biggest gain in segment {best+1}")
+
+# consistency
+st.subheader("Consistency")
 
 fig = go.Figure()
+fig.add_trace(go.Scatter(x=laps1['LapNumber'],
+                         y=laps1['LapTime'].dt.total_seconds(),
+                         name=short1))
+fig.add_trace(go.Scatter(x=laps2['LapNumber'],
+                         y=laps2['LapTime'].dt.total_seconds(),
+                         name=short2))
+fig.update_layout(height=350 if is_mobile else 500)
+st.plotly_chart(fig, use_container_width=True)
 
-t1 = laps1['LapTime'].dt.total_seconds()
-t2 = laps2['LapTime'].dt.total_seconds()
+with st.expander("Consistency help"):
+    st.write("Flat = consistent, spikes = mistakes")
 
-fig.add_trace(go.Scatter(x=laps1['LapNumber'], y=t1, name=d1n))
-fig.add_trace(go.Scatter(x=laps2['LapNumber'], y=t2, name=d2n))
-
-fig.update_layout(
-    height=350 if is_mobile else 500,
-    title="Speed",
-    hovermode="x unified",
-    legend=dict(
-        orientation="h" if is_mobile else "v",
-        yanchor="bottom",
-        y=1.02,
-        xanchor="right",
-        x=1,
-        font=dict(size=10 if is_mobile else 12)
-    ),
-    margin=dict(l=10, r=10, t=40, b=10)
-)
-
-# stats
-st.subheader("Consistency Stats")
-
-std1 = t1.std()
-std2 = t2.std()
-
-avg1 = t1.mean()
-avg2 = t2.mean()
-
-st.write(f"{d1n} Avg: {avg1:.3f}s | Variance: {std1:.3f}")
-st.write(f"{d2n} Avg: {avg2:.3f}s | Variance: {std2:.3f}")
-
-if std1 < std2:
-    st.success(f"{d1n} is more consistent")
-else:
-    st.success(f"{d2n} is more consistent")
-    # mark extremes
-    gi = np.argmin(delta)
-    li = np.argmax(delta)
-
-    st.write(f"Max gain at {ref['Distance'].iloc[gi]:.0f}m")
-    st.write(f"Max loss at {ref['Distance'].iloc[li]:.0f}m")
-
-
-# =========================
-# LIVE REFRESH
-# =========================
+# live refresh
 if live_mode:
-    st.caption("Live mode active")
     time.sleep(30)
     st.rerun()
