@@ -72,7 +72,7 @@ session_label = st.selectbox(
 )
 
 sess_type = session_map[session_label]
-)
+
 
 if not valid_sessions:
     valid_sessions = ['R']
