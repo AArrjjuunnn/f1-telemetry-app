@@ -11,7 +11,6 @@ st.set_page_config(layout="wide")
 st.title("F1 Telemetry Analysis")
 
 # sidebar
-st.sidebar.markdown("## Controls")
 live_mode = st.sidebar.toggle("Live Mode")
 is_mobile = st.sidebar.toggle("Mobile View", value=False)
 
@@ -19,13 +18,14 @@ if st.sidebar.button("Clear Cache"):
     st.cache_data.clear()
     st.rerun()
 
-# load
+# load session (OPTIMIZED)
 @st.cache_data(ttl=900)
 def load_session(year, rnd, sess):
     s = fastf1.get_session(year, rnd, sess)
-    s.load()
+    s.load(laps=True, telemetry=False, weather=False)
     return s
 
+# telemetry (no cache → avoids hash error)
 def get_tel(lap):
     return lap.get_car_data().add_distance()
 
@@ -33,9 +33,10 @@ def fmt(t):
     s = t.total_seconds()
     return f"{int(s//60)}:{s%60:06.3f}"
 
-# inputs
+# year
 year = st.selectbox("Year", list(range(2018, 2027)))
 
+# schedule
 schedule = fastf1.get_event_schedule(year)
 schedule = schedule[schedule['EventFormat'] != 'testing']
 
@@ -53,13 +54,12 @@ race_map = {r['RoundNumber']: r['EventName'] for _, r in schedule.iterrows()}
 rnd = st.selectbox("Race", race_map.keys(),
                    format_func=lambda x: f"R{x} - {race_map[x]}")
 
-# session selector (safe)
-sessions = ['FP1','FP2','FP3','Q','R','S','SQ']
+# session detection
 valid_sessions = []
-
-for s in sessions:
+for s in ['FP1','FP2','FP3','Q','R','S','SQ']:
     try:
-        fastf1.get_session(year, rnd, s)
+        temp = fastf1.get_session(year, rnd, s)
+        temp.load(laps=True, telemetry=False, weather=False)
         valid_sessions.append(s)
     except:
         pass
@@ -75,11 +75,19 @@ if live_mode and 'R' in valid_sessions:
 
 sess_type = st.selectbox("Session", valid_sessions, index=default_index)
 
+# load
 with st.spinner("Loading..."):
     session = load_session(year, rnd, sess_type)
 
-if session.laps.empty:
-    st.warning("No data yet")
+# safe laps access
+try:
+    laps_all = session.laps
+except:
+    st.warning("Session data not ready")
+    st.stop()
+
+if laps_all.empty:
+    st.warning("No lap data yet")
     st.stop()
 
 # drivers
@@ -98,6 +106,7 @@ with st.form("driver_form"):
     submitted = st.form_submit_button("Compare")
 
 if not submitted and "drivers_locked" not in st.session_state:
+    st.info("Pick drivers and press Compare")
     st.stop()
 
 if submitted:
@@ -119,8 +128,12 @@ if d1 == d2:
     st.stop()
 
 # laps
-laps1 = session.laps.pick_driver(d1).dropna(subset=['LapTime']).head(15)
-laps2 = session.laps.pick_driver(d2).dropna(subset=['LapTime']).head(15)
+laps1 = laps_all.pick_driver(d1).dropna(subset=['LapTime']).head(15)
+laps2 = laps_all.pick_driver(d2).dropna(subset=['LapTime']).head(15)
+
+if laps1.empty or laps2.empty:
+    st.warning("No lap data for drivers")
+    st.stop()
 
 laps1 = laps1.sort_values(by='LapTime')
 laps2 = laps2.sort_values(by='LapTime')
@@ -133,7 +146,7 @@ mode = st.radio("Lap Mode", ["Fastest", "Select"],
                 index=0 if st.session_state.mode == "Fastest" else 1)
 st.session_state.mode = mode
 
-# lap pick
+# lap selection
 if mode == "Fastest":
     lap1 = laps1.iloc[0]
     lap2 = laps2.iloc[0]
@@ -143,26 +156,28 @@ else:
     lap1 = laps1[laps1['LapNumber']==l1].iloc[0]
     lap2 = laps2[laps2['LapNumber']==l2].iloc[0]
 
+# telemetry (on demand)
 tel1 = get_tel(lap1)
 tel2 = get_tel(lap2)
+
+if tel1.empty or tel2.empty:
+    st.warning("Telemetry not available")
+    st.stop()
 
 # overview
 st.header("Overview")
 
-if is_mobile:
-    for name, lap, tel in [(short1, lap1, tel1), (short2, lap2, tel2)]:
-        st.markdown(f"### {name}")
-        st.write("Team:", lap['Team'])
-        st.write("Tyre:", lap['Compound'])
-        st.write("Top speed:", f"{tel['Speed'].max():.1f}")
-else:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(short1)
-        st.write("Team:", lap1['Team'])
-    with c2:
-        st.markdown(short2)
-        st.write("Team:", lap2['Team'])
+c1, c2 = st.columns(2)
+with c1:
+    st.markdown(f"### {short1}")
+    st.write("Team:", lap1['Team'])
+    st.write("Tyre:", lap1['Compound'])
+    st.write("Top speed:", f"{tel1['Speed'].max():.1f}")
+with c2:
+    st.markdown(f"### {short2}")
+    st.write("Team:", lap2['Team'])
+    st.write("Tyre:", lap2['Compound'])
+    st.write("Top speed:", f"{tel2['Speed'].max():.1f}")
 
 # lap time
 st.subheader("Lap Time")
@@ -174,10 +189,10 @@ with c2:
 
 # speed
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Speed'], name=short1))
-fig.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Speed'], name=short2))
+fig.add_trace(go.Scatter(x=tel1['Distance'], y=tel1['Speed'], name=short1, line=dict(color='orange')))
+fig.add_trace(go.Scatter(x=tel2['Distance'], y=tel2['Speed'], name=short2, line=dict(color='blue')))
 fig.update_layout(height=350 if is_mobile else 500,
-                  title=f"Speed ({short1} vs {short2})",
+                  title="Speed",
                   showlegend=not is_mobile)
 st.plotly_chart(fig, use_container_width=True)
 
@@ -191,41 +206,16 @@ fig.update_layout(height=350 if is_mobile else 500, title="Delta")
 st.plotly_chart(fig, use_container_width=True)
 
 with st.expander("Delta help"):
-    st.write("Below 0 = Driver1 faster, Above 0 = Driver2 faster")
+    st.write("Below 0 = Driver1 faster")
 
 # summary
 st.subheader("Summary")
-
-final_gap = delta[-1]
-top1 = tel1['Speed'].max()
-top2 = tel2['Speed'].max()
-
-if final_gap < 0:
-    faster = short1
-    reason = "straight-line speed" if top1 > top2 else "cornering"
-else:
-    faster = short2
-    reason = "straight-line speed" if top2 > top1 else "cornering"
-
-st.write(f"{faster} faster by {abs(final_gap):.3f}s via {reason}")
-
-# corner analysis
-st.subheader("Corner Insight")
-
-dist = ref['Distance']
-segments = np.linspace(dist.min(), dist.max(), 20)
-
-seg_delta = []
-for i in range(19):
-    mask = (dist >= segments[i]) & (dist < segments[i+1])
-    seg_delta.append(delta[mask].mean() if np.any(mask) else 0)
-
-best = np.argmin(seg_delta)
-st.write(f"Biggest gain in segment {best+1}")
+gap = delta[-1]
+faster = short1 if gap < 0 else short2
+st.write(f"{faster} faster by {abs(gap):.3f}s")
 
 # consistency
 st.subheader("Consistency")
-
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=laps1['LapNumber'],
                          y=laps1['LapTime'].dt.total_seconds(),
@@ -233,11 +223,10 @@ fig.add_trace(go.Scatter(x=laps1['LapNumber'],
 fig.add_trace(go.Scatter(x=laps2['LapNumber'],
                          y=laps2['LapTime'].dt.total_seconds(),
                          name=short2))
-fig.update_layout(height=350 if is_mobile else 500)
 st.plotly_chart(fig, use_container_width=True)
 
 with st.expander("Consistency help"):
-    st.write("Flat = consistent, spikes = mistakes")
+    st.write("Flat = consistent")
 
 # live refresh
 if live_mode:
