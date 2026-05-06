@@ -54,11 +54,32 @@ schedule = schedule.sort_values(by='RoundNumber')
 race_map = {r['RoundNumber']: r['EventName'] for _, r in schedule.iterrows()}
 rnd = st.selectbox("Race", race_map.keys(),
                    format_func=lambda x: f"R{x} - {race_map[x]}")
-sessions = ['FP1','FP2','FP3','Q','R']
+event = fastf1.get_event(year, rnd)
 
-# choose default based on mode
-default_index = 4 if live_mode else 3  # Race if live, Quali otherwise
+available_sessions = event.sessions
 
+# make readable list
+session_names = [s[0] for s in available_sessions]
+
+# default logic
+default_index = 0
+for i, s in enumerate(session_names):
+    if s == 'Q':
+        default_index = i
+
+if live_mode:
+    for i, s in enumerate(session_names):
+        if s == 'R':
+            default_index = i
+
+sess_type = st.selectbox(
+    "Session",
+    session_names,
+    index=default_index
+)
+
+with st.spinner("Loading..."):
+    session = load_session(year, rnd, sess_type)
 sess_type = st.selectbox(
     "Session",
     sessions,
