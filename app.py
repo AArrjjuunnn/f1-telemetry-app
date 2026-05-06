@@ -55,14 +55,24 @@ rnd = st.selectbox("Race", race_map.keys(),
                    format_func=lambda x: f"R{x} - {race_map[x]}")
 
 # session detection
-valid_sessions = []
-for s in ['FP1','FP2','FP3','Q','R','S','SQ']:
-    try:
-        temp = fastf1.get_session(year, rnd, s)
-        temp.load(laps=True, telemetry=False, weather=False)
-        valid_sessions.append(s)
-    except:
-        pass
+session_map = {
+    "Practice 1": "FP1",
+    "Practice 2": "FP2",
+    "Practice 3": "FP3",
+    "Qualifying": "Q",
+    "Race": "R",
+    "Sprint": "S",
+    "Sprint Qualifying": "SQ"
+}
+
+session_label = st.selectbox(
+    "Session",
+    list(session_map.keys()),
+    index=4 if live_mode else 3  # Race or Quali default
+)
+
+sess_type = session_map[session_label]
+)
 
 if not valid_sessions:
     valid_sessions = ['R']
