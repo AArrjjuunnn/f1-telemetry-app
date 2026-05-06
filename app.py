@@ -5,9 +5,11 @@ import numpy as np
 import datetime
 import time
 
-@st.cache_data(ttl=600)
-def load_schedule(year):
-    schedule = fastf1.get_event_schedule(year)
+@st.cache_data(ttl=900)
+def load_session(year, rnd, sess):
+    s = fastf1.get_session(year, rnd, sess)
+    s.load()  # FULL load, no half-measures
+    return s
 
 st.set_page_config(layout="wide")
 st.title("F1 Telemetry Analysis")
@@ -15,12 +17,6 @@ st.title("F1 Telemetry Analysis")
 # sidebar
 live_mode = st.sidebar.toggle("Live Mode")
 is_mobile = st.sidebar.toggle("Mobile View", value=False)
-
-# load session (OPTIMIZED)
-def load_session(year, rnd, sess):
-    s = fastf1.get_session(year, rnd, sess)
-    s.load(laps=True, telemetry=False, weather=False)
-    return s
 
 # telemetry (no cache → avoids hash error)
 def get_tel(lap):
@@ -77,8 +73,8 @@ with st.spinner("Loading..."):
 # safe laps access
 try:
     laps_all = session.laps
-except:
-    st.warning("Session data not ready")
+except Exception:
+    st.warning("Session still loading or unavailable. Try again.")
     st.stop()
 
 if laps_all.empty:
