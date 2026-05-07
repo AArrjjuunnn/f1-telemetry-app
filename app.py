@@ -17,17 +17,14 @@ def load_schedule(year):
     return fastf1.get_event_schedule(year)
 
 @st.cache_data(ttl=900)
-def load_session_with_retry(year, rnd, sess):
-    delay = 2
-    for attempt in range(5):
-        try:
-            s = fastf1.get_session(year, rnd, sess)
-            s.load()  # FULL LOAD
-            return s
-        except Exception:
-            time.sleep(delay)
-            delay *= 2  # exponential backoff
-    return None
+with st.spinner("Loading session..."):
+    session = load_session_strong(year, rnd, sess_type)
+
+if session is None:
+    st.error("Session data failed to load. Try again in 10–20 seconds.")
+    st.stop()
+
+laps_all = session.laps
 
 # ------------------ HELPERS ------------------ #
 
